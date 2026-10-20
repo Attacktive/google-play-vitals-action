@@ -1,0 +1,110 @@
+name: 'Release'
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: 'read'
+
+concurrency:
+  group: 'release'
+  cancel-in-progress: false
+  queue: 'max'
+
+jobs:
+  test:
+    uses: './.github/workflows/ci.yaml'
+
+  publish:
+    needs: 'test'
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'write'
+    steps:
+      - uses: 'actions/checkout@v7'
+        with:
+          fetch-depth: 0
+      - name: 'Validate release version'
+        id: 'version'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          core='(0|[1-9][0-9]*)'
+          identifier='[0-9A-Za-z-]+'
+          pattern="^v${core}\.${core}\.${core}(-${identifier}(\.${identifier})*)?(\+${identifier}(\.${identifier})*)?$"
+          if [[ ! "$TAG" =~ $pattern ]]; then
+            echo 'Expected a v-prefixed semantic version, such as v0.1.0 or v0.2.0-rc.1.' >&2
+            exit 1
+          fi
+
+          version=${TAG#v}
+          version=${version%%+*}
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+            IFS='.' read -ra identifiers <<< "${version#*-}"
+            for identifier in "${identifiers[@]}"; do
+              if [[ "$identifier" =~ ^0[0-9]+$ ]]; then
+                echo 'Numeric prerelease identifiers must not contain leading zeros.' >&2
+                exit 1
+              fi
+            done
+          fi
+
+          echo "major=v${version%%.*}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+      - name: 'Publish GitHub release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          if draft=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [[ "$draft" == 'true' ]]; then
+              echo 'An existing draft release must be published or removed before rerunning.' >&2
+              exit 1
+            fi
+
+            echo "Release $TAG is already published; continuing with its major-version tag."
+            exit 0
+          fi
+
+          flags=()
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+
+          gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" "${flags[@]}"
+      - name: 'Update stable major-version tag'
+        if: ${{ steps.version.outputs.prerelease == 'false' }}
+        env:
+          TAG: ${{ github.ref_name }}
+          MAJOR: ${{ steps.version.outputs.major }}
+        run: |
+          major_ref="refs/tags/$MAJOR"
+          previous=$(git rev-parse --verify "$major_ref" 2>/dev/null || true)
+          if [[ -n "$previous" ]]; then
+            current_commit=$(git rev-parse "$major_ref^{}")
+            current_version=''
+            while IFS= read -r tag; do
+              if [[ "$tag" =~ ^${MAJOR}\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\+[0-9A-Za-z.-]+)?$ ]]; then
+                current_version=${tag%%+*}
+                break
+              fi
+            done < <(git tag --points-at "$current_commit" --list "$MAJOR.*" --sort=-version:refname)
+
+            if [[ -z "$current_version" ]]; then
+              echo "Cannot determine the stable release behind $MAJOR; refusing to overwrite it." >&2
+              exit 1
+            fi
+
+            newest=$(printf '%s\n' "$current_version" "${TAG%%+*}" | sort -V | tail -n 1)
+            if [[ "$newest" == "$current_version" ]]; then
+              echo "$MAJOR already points to $current_version or a release with the same precedence."
+              exit 0
+            fi
+          fi
+
+          git push --force-with-lease="$major_ref:$previous" origin "$GITHUB_SHA:$major_ref"

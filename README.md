@@ -96,7 +96,7 @@ jobs:
 
 The `GH_REPO` variable lets GitHub CLI resolve the consumer repository on a runner without a local checkout.
 
-Use a pinned action commit SHA for production workflows after publishing a release. No `v1` tag exists until one is explicitly created.
+Use a pinned action commit SHA for production workflows after publishing a release. The `@v1` example requires a stable `v1.x.y` release; use the exact published tag or commit SHA during the `0.x` phase.
 
 ### Google access
 
@@ -128,3 +128,24 @@ The API client accepts a missing `errorIssues` array for an empty search result.
 ## Development
 
 Requires Node.js 24. Run `npm test` to execute the tests with the built-in Node test runner.
+
+## Releasing
+
+Push a `v`-prefixed semantic-version tag on the commit you want to release.
+For example, an initial release matching the current package version would use:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow runs the same tests and syntax checks as CI before publishing a GitHub Release with generated notes.
+The action runs directly from the committed JavaScript sources, so there is no bundle or package to build or upload.
+Version bumping and creating the initial tag remain manual; the workflow does neither.
+
+Stable releases create or advance the corresponding major-version tag: `v0.1.0` updates `v0`, and `v1.0.0` updates `v1`.
+Releasing an older version does not move its major tag backward.
+Prerelease tags such as `v0.2.0-rc.1` publish prereleases without becoming the latest release or changing a major tag.
+Publishing is serialized, and only the publishing job receives repository write permission.
+If publishing succeeds but the major-tag update fails, resolve the reported tag conflict and rerun the failed job; it will reuse the published release.
+An existing draft release must be published or removed before rerunning.
