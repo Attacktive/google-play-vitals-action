@@ -1,0 +1,27 @@
+name: 'CI'
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: 'ubuntu-latest'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: 'Test reporting and snapshot comparison'
+        run: npm test
+      - name: 'Check JavaScript syntax'
+        run: |
+          node --check src/index.js
+          node --check src/client.js
+          node --check src/report.js

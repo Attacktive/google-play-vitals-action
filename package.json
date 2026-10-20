@@ -1,0 +1,14 @@
+{
+	"name": "google-play-vitals-action",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "A dependency-free GitHub Action for Google Play crash and ANR reports",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"test": "node --test"
+	},
+	"license": "MIT"
+}

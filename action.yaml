@@ -1,0 +1,46 @@
+name: 'Google Play Vitals'
+description: 'Fetch and compare Google Play crash and ANR issues without managing GitHub issues or artifacts'
+author: 'Attacktive'
+
+branding:
+  icon: 'activity'
+  color: 'green'
+
+inputs:
+  package-name:
+    description: 'Android application package name'
+    required: true
+  google-access-token:
+    description: 'OAuth access token authorized for the Google Play Developer Reporting API'
+    required: true
+  previous-report:
+    description: 'Optional path to a JSON report from an earlier execution'
+    required: false
+  lookback-hours:
+    description: 'Hours of Android vitals history to query'
+    default: '72'
+    required: false
+  output-directory:
+    description: 'Directory for generated JSON and Markdown reports'
+    default: 'play-vitals'
+    required: false
+
+outputs:
+  report-file:
+    description: 'Absolute path to the complete JSON report and reusable snapshot'
+  markdown-file:
+    description: 'Absolute path to the human-readable Markdown report'
+  issue-count:
+    description: 'Number of crash/ANR clusters in the queried interval'
+  new-issues:
+    description: 'Number of clusters not seen in previous history'
+  resurfaced-issues:
+    description: 'Number of previously observed clusters that reappeared after the lookback interval'
+  updated-issues:
+    description: 'Number of clusters with more recent events than previously observed'
+  has-changes:
+    description: 'Whether new, resurfaced, or updated clusters were detected'
+
+runs:
+  using: 'node24'
+  main: 'src/index.js'
