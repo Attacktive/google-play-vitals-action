@@ -57,6 +57,7 @@ jobs:
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           run_id=$(gh run list --workflow "$GITHUB_WORKFLOW" --branch "$GITHUB_REF_NAME" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -n "$run_id" ] && gh run download "$run_id" --name 'play-vitals-snapshot' --dir previous; then
@@ -92,6 +93,8 @@ jobs:
         if: steps.vitals.outputs.new-issues != '0'
         run: echo 'Consumer decides whether and how to file issues'
 ```
+
+The `GH_REPO` variable lets GitHub CLI resolve the consumer repository on a runner without a local checkout.
 
 Use a pinned action commit SHA for production workflows after publishing a release. No `v1` tag exists until one is explicitly created.
 
